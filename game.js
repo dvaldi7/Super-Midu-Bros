@@ -1,3 +1,5 @@
+import { createAnimations } from "./animations.js"
+
 /* global Phaser */
 const config = {
     type: Phaser.AUTO, //webgl, canvas 
@@ -5,6 +7,13 @@ const config = {
     height: 244,
     backgroundColor: "#049cd8",
     parent: "game",
+    physics: {
+        default: "arcade",
+        arcade: {
+            gravity: { y: 300 }, 
+            debug: false
+        }
+    },
     scene: {
         preload, //se ejecuta para precargar los recursos (el 1º)
         create, //se ejecuta cuando el juego comienza (el 2º)
@@ -48,39 +57,49 @@ function create() {
 
     .setScale(0.15) //Como la imagen es muy grande se escala con esto
 
-    //AÑADIMOS EL SPRITESHEET DE MARIO
-    this.mario = this.add.sprite(50, 210, "mario")
-    .setOrigin(0, 1)
-
     //AÑADIMOS EL SUELO
-    this.add.tileSprite(0, config.height -32, config.width, 32, 
-        "floorbricks")
-    .setOrigin(0, 0)
+    this.floor = this.physics.add.staticGroup()
 
-    //ANIMACIONES DE MARIO AL ANDAR
-    this.anims.create({
-        key: "mario-walk",
-        frames: this.anims.generateFrameNumbers(
-            "mario",
-            { start: 3, end: 2 }
-        ),
-        frameRate: 12,
-        repeat: -1 //-1 significa infinito. Para que la repita todo el rato
-    })
-
-    //ANIMACIONES DE MARIO EN ESTÁTICO
+    this.floor
+        .create(0, config.height -16, "floorbricks")
+        .setOrigin(0, 0.5)
+        .refreshBody()
     
-    this.anims.create({
-        key: "mario-idle",
-        frames: [{ key: "mario", frame: 0 }]
-    })
+        this.floor
+        .create(150, config.height -16, "floorbricks")
+        .setOrigin(0, 0.5)
+        .refreshBody()
 
-    //ANIMACIONES DE MARIO AL SALTAR
-    
-    this.anims.create({
-        key: "mario-jump",
-        frames: [{ key: "mario", frame: 5 }]
-    })
+    //AÑADIMOS EL SPRITESHEET DE MARIO
+
+        /*Así lo cargamos al empeZar, pero para añadirlo las fisicas 
+         tenemos que cambiarlo*/
+
+    //this.mario = this.add.sprite(50, 210, "mario")
+    //.setOrigin(0, 1) 
+
+    this.mario = this.physics.add.sprite(50, 100, "mario")
+    .setOrigin(0, 1)
+    //.setGravityY(300) Si quisieramos darle una fisica a mario diferente al resto
+    .setCollideWorldBounds(true) //para que se choque con los limites de la pantalla
+    .setGravityY(300)//para ajustar el salto con la gravedad. si se modifica, salta más o menos
+
+    //LÍMITES DEL MUNDO DEL JUEGO
+
+    this.physics.world.setBounds(0, 0, 2000, config.height)//ajustamos la camara desde donde empieza "el mundo" hasta sus limites
+
+    //AÑADIMOS LAS COLISIONES DE MARIO CON EL SUELO
+
+    this.physics.add.collider(this.mario, this.floor)
+
+    //LÍMITES DE LA CÁMARA
+
+    this.cameras.main.setBounds(0, 0, 2000, config.height)//mismos limites que el mundo para que llegue hasta el final de este
+    this.cameras.main.startFollow(this.mario) //para que la camara siga a mario pr el mundo
+
+    //PARA CREAR ANIMACIONES DEL OTRO ARCHIVO
+
+    createAnimations(this)
 
     //MOVIMIENTOS
     this.keys = this.input.keyboard.createCursorKeys()/*Método para visualizar las teclas
@@ -89,25 +108,45 @@ function create() {
 
 }
 function update() {
+    if (this.mario.isDead) return
     if(this.keys.left.isDown) //para que ande a la izquierda
     {
         this.mario.anims.play("mario-walk", true)
         this.mario.x -= 2 
         this.mario.flipX = true //para girar al personaje cuando va hacia atrás
     }
+
     else if (this.keys.right.isDown) //para que anda a la derecha
     {
         this.mario.anims.play("mario-walk", true)
         this.mario.x += 2 
         this.mario.flipX = false //que deje de girar el personaje al andar
     }
+
     else //si no se mueve mario
     {
         this.mario.anims.play("mario-idle", true)
     }
-    if (this.keys.up.isDown) //si presionamos la tecla de arriba (que salte)
+
+    if (this.keys.up.isDown && this.mario.body.touching.down) 
+        //si presionamos la tecla de arriba (que salte) && si toca suelo
     {
-        this.mario.y -= 5
+        this.mario.setVelocityY(-300)
         this.mario.anims.play("mario-jump", true)
+    }
+
+    if (this.mario.y >= config.height) //si mario toca el suelo. para que muera y pase a ese frame
+    {
+        this.mario.isDead = true
+        this.mario.anims.play("mario-dead")
+        this.mario.setCollideWorldBounds(false)
+
+        setTimeout( () => { //para que al morir de un saltito como hace en el original
+            this.mario.setVelocityY(-350)
+        }, 100)
+
+        setTimeout( () => {
+            this.scene.restart()
+        }, 2000) //para que resetee el juego cuando pasen 2 segundos al morir
     }
 }
